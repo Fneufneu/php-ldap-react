@@ -366,6 +366,11 @@ class Ldap extends Ber
 	}
 	
 	private function Controls_($controls) {
+		$res = array();
+
+		if (!is_array($controls['value']))
+			return $res;
+
 		foreach($controls['value'] as $control) {
 			$ctrl['controlType'] = $control['value'][0]['value'];
 			$ctrl['controlValue'] = $control['value'][1]['value'];

@@ -90,7 +90,12 @@ class Client extends Ldap
 			$resultCode = $status['resultCode'];
 			$diagnosticMessage = $status['diagnosticMessage'];
 		} 
-		if ($resultCode != $successCode && false) throw new Exception($diagnosticMessage, $resultCode);
+		if ($resultCode != $successCode && false)
+			throw new Exception($diagnosticMessage, $resultCode);
+
+		if ($this->status['protocolOp'] == 'searchResEntry')
+			return self::searchResEntry($this->status);
+
 		return $resultCode;
 	}
 	
@@ -186,7 +191,7 @@ class Client extends Ldap
 			|| !stream_socket_enable_crypto($this->fd, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) return $this->handleresult(0, 1234567890 , "startTLS failed");
 	}
 
-	public function search($base, $filter, $attributes)
+	public function search($base, $filter, $attributes = array())
 	{
 		$controls = '';
 		if ($pagesize = $this->options['pagesize']) {
@@ -202,20 +207,19 @@ class Client extends Ldap
 	{
 		unset($this->cookie);
 		$response = $this->receiveldapmessage();
-		if ($response['protocolOp'] == 'searchResEntry') {
+		if ($response['protocolOp'] == 'searchResEntry')
 			return self::searchResEntry($response);
-		} else {
-			$this->status = $response;
-			$this->handleresult();
-			foreach($response['controls'] as $control) {
-				if ($control['controlType'] == '1.2.840.113556.1.4.319') {
-					$cookiepdu = $control['controlValue'];
-					$struct = self::berdecode($cookiepdu, strlen($cookiepdu));
-					$this->cookie = $struct[0]['value'][1]['value'];
-				}
+
+		$this->status = $response;
+		$this->handleresult();
+		foreach($response['controls'] as $control) {
+			if ($control['controlType'] == '1.2.840.113556.1.4.319') {
+				$cookiepdu = $control['controlValue'];
+				$struct = self::berdecode($cookiepdu, strlen($cookiepdu));
+				$this->cookie = $struct[0]['value'][1]['value'];
 			}
-			return false;
 		}
+		return false;
 	}
 
 	public function getpage($base, $filter, $attributes, $paged = false)
