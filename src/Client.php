@@ -123,19 +123,24 @@ class Client extends Ldap
     public function connect($url)
     {
         $defaultport = array(null => '389', 'ldap' => '389', 'ldaps' => '636', 'ldaptls' => '389');
-        if (preg_match('/^(?:(ldap(?:|s|tls))(?::\/\/))?(.+?):?(\d+)?$/', $url, $d)) {
-            list($dummy, $protocol, $address, $port) = $d;
-            if (!$port) $port = $defaultport[$protocol];
-            $transport = $protocol == 'ldaps' ? 'tls://' : 'tcp://';
-            #print_r("$transport$address:$port");
-            $this->fd = @stream_socket_client("$transport$address:$port", $errno, $errstr, 10, STREAM_CLIENT_CONNECT);
-            # can be false while $errorno == 0 if error happens before the actual connect eg. dns error - thus the 1234567890 errorno
-            if ($this->fd === false) return $this->handleresult(0, $errno === 0 ? 1234567890 : $errno, $errstr);
-            if ($protocol == 'ldaptls') return $this->startTLS();
-            return 0;
-        } else {
+        if (! preg_match('/^(?:(ldap(?:|s|tls))(?::\/\/))?(.+?):?(\d+)?$/', $url, $d)) {
             return $this->handleresult(0, 1234567890 , "$url not valid");
         }
+		list($dummy, $protocol, $address, $port) = $d;
+		if (!$port)
+			$port = $defaultport[$protocol];
+		$transport = $protocol == 'ldaps' ? 'tls://' : 'tcp://';
+		#print_r("$transport$address:$port");
+		$this->fd = @stream_socket_client("$transport$address:$port", $errno, $errstr, 10, STREAM_CLIENT_CONNECT);
+
+		# can be false while $errorno == 0 if error happens before the actual connect eg. dns error - thus the 1234567890 errorno
+		if ($this->fd === false)
+			return $this->handleresult(0, $errno === 0 ? 1234567890 : $errno, $errstr);
+
+		if ($protocol == 'ldaptls')
+			return $this->startTLS();
+
+		return 0;
     }
 
     protected function bindRequest($bind_rdn = NULL, $bind_password = NULL, $controls = '')
