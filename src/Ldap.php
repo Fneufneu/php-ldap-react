@@ -3,8 +3,9 @@
 namespace Fneufneu\React\Ldap;
 
 use phpseclib\Math\BigInteger;
+use Evenement\EventEmitter;
 
-class Ber
+class Ber extends EventEmitter
 {
 	const universal	 = 0x00;
 	const application   = 0x40;
@@ -258,7 +259,7 @@ class Ldap extends Ber
 		return self::sequence(self::control('1.2.840.113556.1.4.319', $criticality, self::sequence(self::integer($size) . self::octetstring($cookie))));
 	}
 
-	private function pretty($message) {
+	public function pretty($message) {
 		$message = $message[0]['value'];
 		$tag = $message[1]['tag'];
 		$op = $message[1]['value'];

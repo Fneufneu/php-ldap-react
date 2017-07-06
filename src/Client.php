@@ -2,6 +2,12 @@
 
 namespace Fneufneu\React\Ldap;
 
+use React\EventLoop\LoopInterface;
+use React\Socket\ConnectorInterface;
+use React\Socket\Connector;
+use React\Promise;
+use React\Promise\Deferred;
+use Fneufneu\React\Ldap\Result;
 
 class Client extends Ldap
 {
@@ -14,12 +20,34 @@ class Client extends Ldap
 		'pagesize' => 0,
 		'resultfilter' => '',
 	);
+	private $connnector;
+	private $connected;
+	private $stream;
+	private $uri;
+	private $buffer;
+	private $bindDeferred;
+	private $requests;
 
-	function __construct($server, $dn = null, $pw = null)
+	// function __construct($server, $dn = null, $pw = null)
+	function __construct(LoopInterface $loop, string $uri, $options = array())
 	{
 		parent::__construct();
-		$this->connect($server);
-		$this->bind($dn, $pw);
+
+		$this->options = $options + $this->options + array(
+			'uri' => $uri,
+			'connector' => null,
+			'dn' => null,
+			'password' => null
+		);
+
+		if ($options['connector'] instanceof ConnectorInterface) {
+			$this->connector = $options['connector'];
+		} else {
+			$this->connector = new Connector($loop);
+		}
+
+		$this->connected = false;
+		$this->uri = $uri;
 	}
 
 	static function filter($filter)
@@ -29,7 +57,8 @@ class Client extends Ldap
 		$elements = preg_split("/(\(|\)|~=|>=|<=|=\*\)|\*|=|&|\||!|\\\\[a-z0-9]{2})/i", $filter, -1, PREG_SPLIT_DELIM_CAPTURE + PREG_SPLIT_NO_EMPTY);
 		$i = 0;
 		$res = self::dofilter($elements, $i);
-		if ($i - sizeof($elements) != 1) $this->handleresult(0, 1234567890 , "Unmatched ) or (  in filter: $filter");
+		if ($i - sizeof($elements) != 1)
+			throw new \InvalidArgumentException("Unmatched ) or (  in filter: $filter");
 		return self::filter2ber($res);
 	}
 
@@ -101,21 +130,73 @@ class Client extends Ldap
 	
 	private function sendldapmessage($pdu, $successCode = 0)
 	{
-		if (isset($this->successCode)) throw new Exception('You need to call result() before sending a new request ...');
-		fwrite($this->fd, $pdu);
-		$this->successCode = $successCode;
+		printf("[%d] sendldapmessage %d bytes".PHP_EOL,
+			$this->messageID - 1, strlen($pdu));
+		return $this->stream->write($pdu);
 	}
 	
-	public function result() {
+	public function result()
+	{
 		$this->status = $this->receiveldapmessage();
 		$successCode = $this->successCode;
 		unset($this->successCode);
 		return $this->handleresult($successCode);
 	}
 	
+	public function handleData($data)
+	{
+		printf("handleData (%d bytes)".PHP_EOL, strlen($data));
+		$pdu = substr($data, 0, 2);
+		$data = substr($data, 2);
+		$lenlen = ord($pdu[1]);
+		if ($lenlen > 0x80) {
+			$pdu .= substr($data, 0, $lenlen - 0x80);
+			$data = substr($data, $lenlen - 0x80);
+		}
+		$i = 1;
+		$len = self::ber_valuelength($pdu, $i);
+		$prelen = strlen($pdu);
+		$pdu .= substr($data, 0, $len);
+		$data = substr($data, $len);
+		#self::dump($pdu);
+		$message = self::berdecode($pdu, $prelen + $len);
+		$message = $this->pretty($message);
+		//var_dump($message);
+
+		$result = $this->requests[$message['messageID']];
+		if (0 != $message['resultCode']) {
+			$this->emit('error', array(new \RuntimeException('Whoops')));
+		} elseif ($message['protocolOp'] == 'bindResponse') {
+			var_dump($message);
+			// TODO check error
+			echo "bindDeferred->resolve()".PHP_EOL;
+			$this->bindDeferred->resolve();
+		} elseif ($message['protocolOp'] == 'searchResEntry') {
+			//$this->emit('data', array(self::searchResEntry($message)));
+			$message = self::searchResEntry($message);
+			$result->data[] = $message;
+			$result->emit('data', array($message));
+		} else {
+			var_dump($message);
+			//$result-> = $message['resultCode'];
+			if ($result) {
+				$result->emit('end', array($result->data));
+				unset($this->requests[$message['messageID']]);
+			}
+		}
+		printf('data left: %d bytes'.PHP_EOL, strlen($data));
+		if (strlen($data) > 0)
+			$this->handleData($data);
+		
+	}
+
 	static function searchResEntry($response)
 	{
 		$res = $response['attributes'];
+		foreach ($res as $k => $v) {
+			if (is_array($v) and 1 == count($v))
+				$res[$k] = array_shift($v);
+		}
 		$res['dn'] = $response['objectName'];
 		return $res;
 	}
@@ -125,27 +206,48 @@ class Client extends Ldap
 		return $this->status;
 	}
 
-	public function connect($url)
+	private function connect()
 	{
+		$url = $this->options['uri'];
+
 		$defaultport = array(null => '389', 'ldap' => '389', 'ldaps' => '636', 'ldaptls' => '389');
 		if (! preg_match('/^(?:(ldap(?:|s|tls))(?::\/\/))?(.+?):?(\d+)?$/', $url, $d)) {
-			return $this->handleresult(0, 1234567890 , "$url not valid");
+			throw new \InvalidArgumentException('invalid uri: '.$url);
 		}
 		list($dummy, $protocol, $address, $port) = $d;
 		if (!$port)
 			$port = $defaultport[$protocol];
 		$transport = $protocol == 'ldaps' ? 'tls://' : 'tcp://';
 		#print_r("$transport$address:$port");
-		$this->fd = @stream_socket_client("$transport$address:$port", $errno, $errstr, 10, STREAM_CLIENT_CONNECT);
 
-		# can be false while $errorno == 0 if error happens before the actual connect eg. dns error - thus the 1234567890 errorno
-		if ($this->fd === false)
-			return $this->handleresult(0, $errno === 0 ? 1234567890 : $errno, $errstr);
+		// TODO
+		//if ($protocol == 'ldaptls')
+		//	return $this->startTLS();
 
-		if ($protocol == 'ldaptls')
-			return $this->startTLS();
+		$streamRef =& $this->stream;
+	 	$promise = $this->connector->connect("$transport$address:$port")
+			->then(function (\React\Socket\ConnectionInterface $stream) use (&$streamRef) {
+				echo "connector->connec()->then()".PHP_EOL;
+				$streamRef = $stream;
+				$stream->on('data', array($this, 'handleData'));
+				$stream->on('end', function () {
+					echo "connection ended".PHP_EOL;
+				});
+				$stream->on('close', function () {
+					echo "connection closed".PHP_EOL;
+					$this->emit('end');
+				});
+				$stream->on('error', function (Exception $e) {
+					echo "connection error ".$e->getMessage().PHP_EOL;
+					$this->emit('error', array($e));
+				});
+				$this->connected = true;
+			}, function (Exception $error) {
+				echo "error: ".$error->getMessage().PHP_EOL;
+				$this->bindDeferred->reject($error);
+			});
 
-		return 0;
+		return $promise;
 	}
 
 	protected function bindRequest($bind_rdn = NULL, $bind_password = NULL, $controls = '')
@@ -174,13 +276,30 @@ class Client extends Ldap
 
 	public function bind($bind_rdn = NULL, $bind_password = NULL)
 	{
-		return $this->sendldapmessage($this->bindRequest($bind_rdn, $bind_password));
+		if ($this->connected) {
+			return Promise\reject(new \Exception('already connected, not supported'));
+		}
+		echo "bind: connect()".PHP_EOL;
+		$this->bindDeferred = new Deferred();
+		/* TODO timeout but need $loop
+		$loop->addTimer(3, function () {
+			$this->stream->close();
+			$this->bindDeferred->reject(new \React\Promise\Timer\TimeoutException('timeout'));
+		}); */
+		$this->connect()->then(function () use ($bind_rdn, $bind_password) {
+			echo "connect->then()".PHP_EOL;
+			$this->sendldapmessage($this->bindRequest($bind_rdn, $bind_password));
+			echo ".";
+		});
+
+		return $this->bindDeferred->promise();
 	}
 
 	public function unbind()
 	{
-		$this->sendldapmessage(self::sequence(self::integer($this->messageID++) . self::application(self::unbindRequest, '', false)));
-		fclose($this->fd);
+		return $this->sendldapmessage(self::sequence(
+			self::integer($this->messageID++)
+			. self::application(self::unbindRequest, '', false)));
 	}
 
 	public function startTLS()
@@ -193,6 +312,9 @@ class Client extends Ldap
 
 	public function search($base, $filter, $attributes = array())
 	{
+		if (!$this->connected)
+			throw \RuntimeException('not connected');
+
 		$controls = '';
 		if ($pagesize = $this->options['pagesize']) {
 			$controls .= self::pagedResultsControl($pagesize, $this->cookie, true);
@@ -200,7 +322,11 @@ class Client extends Ldap
 		if ($resultfilter = $this->options['resultfilter']) {
 			$controls .=  self::matchedValuesControl(self::filter($resultfilter));
 		}
-		$this->sendldapmessage($this->searchRequest($base, self::filter($filter), $attributes, $controls));
+		$result = new Result();
+		$this->requests[$this->messageID] = $result;
+		$message = $this->searchRequest($base, self::filter($filter), $attributes, $controls);
+		$this->sendldapmessage($message);
+		return $result;
 	}
 
 	public function nextentry()
