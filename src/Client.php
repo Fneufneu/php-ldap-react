@@ -164,13 +164,13 @@ class Client extends Ldap
 		//var_dump($message);
 
 		$result = $this->requests[$message['messageID']];
-		if (0 != $message['resultCode']) {
-			$this->emit('error', array(new \RuntimeException('Whoops')));
-		} elseif ($message['protocolOp'] == 'bindResponse') {
-			var_dump($message);
-			// TODO check error
-			echo "bindDeferred->resolve()".PHP_EOL;
-			$this->bindDeferred->resolve();
+		if ($message['protocolOp'] == 'bindResponse') {
+			if (0 != $message['resultCode']) {
+				$this->bindDeferred->reject(new \RuntimeException($message['diagnosticMessage']));
+			} else {
+				var_dump($message);
+				$this->bindDeferred->resolve();
+			}
 		} elseif ($message['protocolOp'] == 'searchResEntry') {
 			//$this->emit('data', array(self::searchResEntry($message)));
 			$message = self::searchResEntry($message);
@@ -235,6 +235,7 @@ class Client extends Ldap
 				});
 				$stream->on('close', function () {
 					echo "connection closed".PHP_EOL;
+					$this->connected = false;
 					$this->emit('end');
 				});
 				$stream->on('error', function (Exception $e) {
@@ -276,21 +277,22 @@ class Client extends Ldap
 
 	public function bind($bind_rdn = NULL, $bind_password = NULL)
 	{
-		if ($this->connected) {
-			return Promise\reject(new \Exception('already connected, not supported'));
-		}
-		echo "bind: connect()".PHP_EOL;
+		echo "bind()".PHP_EOL;
 		$this->bindDeferred = new Deferred();
 		/* TODO timeout but need $loop
 		$loop->addTimer(3, function () {
 			$this->stream->close();
 			$this->bindDeferred->reject(new \React\Promise\Timer\TimeoutException('timeout'));
 		}); */
-		$this->connect()->then(function () use ($bind_rdn, $bind_password) {
-			echo "connect->then()".PHP_EOL;
+		if ($this->connected) {
+			echo "already connected, sending bindRequest".PHP_EOL;
 			$this->sendldapmessage($this->bindRequest($bind_rdn, $bind_password));
-			echo ".";
-		});
+		} else {
+			$this->connect()->then(function () use ($bind_rdn, $bind_password) {
+				echo "connected, sending bindRequest".PHP_EOL;
+				$this->sendldapmessage($this->bindRequest($bind_rdn, $bind_password));
+			});
+		}
 
 		return $this->bindDeferred->promise();
 	}
