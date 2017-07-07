@@ -69,6 +69,7 @@ class Parser
 
 		return $this->pretty($decoded);
 	}
+
 	/**
 	 * value => content
 	 * tag => constant
@@ -139,32 +140,32 @@ class Parser
 			return $res;
 		}
 		return array($key => $this->{$function.'_'}($op['content']));
-   }
-   
-   	private function SubstringFilter_($op) {
-   		$res['type'] = $op[0]['content'];
-   		foreach($op[1]['content'] as $string) {
-   			$tag = $string['constant'];
-   			if ($tag == 0) $res['initial'] = $string['content'];
-   			elseif ($tag = 1) $res['any'][] = $string['content'];
-   			else $res['final'] = $string['content'];
-   		}
-   		return $res;
-   	}
-   
-   private function AttributeValueAssertion_($op) {
-   		return array("attributeDesc" => $op['content'][0]['content'], 'assertionValue' => $op['content'][1]['content']);
-   }
-   
-   private function AttributeValueAssertionx_($op) {
-   		return array("attributeDesc" => $op[0]['content'], 'assertionValue' => $op[1]['content']);
-   }
-   
-   private function AttributeSelection_($op) {
+	}
+
+	private function SubstringFilter_($op) {
+		$res['type'] = $op[0]['content'];
+		foreach($op[1]['content'] as $string) {
+			$tag = $string['constant'];
+			if ($tag == 0) $res['initial'] = $string['content'];
+			elseif ($tag = 1) $res['any'][] = $string['content'];
+			else $res['final'] = $string['content'];
+		}
+		return $res;
+	}
+
+	private function AttributeValueAssertion_($op) {
+			return array("attributeDesc" => $op['content'][0]['content'], 'assertionValue' => $op['content'][1]['content']);
+	}
+
+	private function AttributeValueAssertionx_($op) {
+			return array("attributeDesc" => $op[0]['content'], 'assertionValue' => $op[1]['content']);
+	}
+
+	private function AttributeSelection_($op) {
 		$res = array();
-   		foreach($op['content'] as $attribute) {
-   			$res[] = $attribute['content'];
-   		}
+		foreach($op['content'] as $attribute) {
+			$res[] = $attribute['content'];
+		}
 		return $res;
 	}
 	

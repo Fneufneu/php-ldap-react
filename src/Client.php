@@ -7,6 +7,7 @@ use React\Socket\ConnectorInterface;
 use React\Socket\Connector;
 use React\Promise;
 use React\Promise\Deferred;
+use React\Promise\Timer;
 use Fneufneu\React\Ldap\Result;
 use Fneufneu\React\Ldap\Parser;
 
@@ -20,13 +21,15 @@ class Client extends Ldap
 		'typesonly' => false,
 		'pagesize' => 0,
 		'resultfilter' => '',
+		'timeout' => 10,
 	);
+	private $loop;
 	private $connnector;
 	private $connected;
 	private $stream;
 	private $uri;
 	private $buffer;
-	private $bindDeferred;
+	private $deferred;
 	private $requests;
 	private $parser;
 
@@ -44,13 +47,14 @@ class Client extends Ldap
 		if ($options['connector'] instanceof ConnectorInterface) {
 			$this->connector = $options['connector'];
 		} else {
-			$this->connector = new Connector($loop);
+			$this->connector = new Connector($loop, array('timeout' => $this->options['timeout']));
 		}
 
 		$this->parser = new Parser();
 		$this->buffer = '';
 		$this->connected = false;
 		$this->uri = $uri;
+		$this->loop = $loop;
 	}
 
 	static function filter($filter)
@@ -116,34 +120,11 @@ class Client extends Ldap
 		return $res;
 	}
 
-	private function handleresult($successCode = 0, $resultCode = null, $diagnosticMessage = null) {
-		if ($resultCode == null) {
-			$status = $this->status();
-			$resultCode = $status['resultCode'];
-			$diagnosticMessage = $status['diagnosticMessage'];
-		} 
-		if ($resultCode != $successCode && false)
-			throw new Exception($diagnosticMessage, $resultCode);
-
-		if ($this->status['protocolOp'] == 'searchResEntry')
-			return self::searchResEntry($this->status);
-
-		return $resultCode;
-	}
-	
 	private function sendldapmessage($pdu, $successCode = 0)
 	{
 		printf("[%d] sendldapmessage %d bytes".PHP_EOL,
 			$this->messageID - 1, strlen($pdu));
 		return $this->stream->write($pdu);
-	}
-	
-	public function result()
-	{
-		$this->status = $this->receiveldapmessage();
-		$successCode = $this->successCode;
-		unset($this->successCode);
-		return $this->handleresult($successCode);
 	}
 	
 	public function handleData($data)
@@ -160,15 +141,22 @@ class Client extends Ldap
 			return;
 		}
 
+		// var_dump($message);
 		$result = $this->requests[$message['messageID']];
 		if ($message['protocolOp'] == 'bindResponse') {
 			if (0 != $message['resultCode']) {
-				$this->bindDeferred->reject(new \RuntimeException($message['diagnosticMessage']));
+				$this->deferred->reject(new \RuntimeException($message['diagnosticMessage']));
 			} else {
-				$this->bindDeferred->resolve();
+				$this->deferred->resolve();
 			}
 		} elseif (0 != $message['resultCode']) {
 			$result->emit('error', array(new \RuntimeException($message['diagnosticMessage'])));
+		} elseif ($message['protocolOp'] == 'extendedResp') {
+			$streamEncryption = new \React\Socket\StreamEncryption($this->loop, false);
+			$streamEncryption->enable($this->stream)->then(function () {
+				$this->deferred->resolve();
+			});
+			return;
 		} elseif ($message['protocolOp'] == 'searchResEntry') {
 			$message = self::searchResEntry($message);
 			$result->data[] = $message;
@@ -242,7 +230,7 @@ class Client extends Ldap
 				$this->connected = true;
 			}, function (Exception $error) {
 				echo "error: ".$error->getMessage().PHP_EOL;
-				$this->bindDeferred->reject($error);
+				$this->deferred->reject($error);
 			});
 
 		return $promise;
@@ -274,12 +262,8 @@ class Client extends Ldap
 
 	public function bind($bind_rdn = NULL, $bind_password = NULL)
 	{
-		$this->bindDeferred = new Deferred();
-		/* TODO timeout but need $loop
-		$loop->addTimer(3, function () {
-			$this->stream->close();
-			$this->bindDeferred->reject(new \React\Promise\Timer\TimeoutException('timeout'));
-		}); */
+		$this->deferred = new Deferred();
+
 		if ($this->connected) {
 			echo "already connected, sending bindRequest".PHP_EOL;
 			$this->sendldapmessage($this->bindRequest($bind_rdn, $bind_password));
@@ -290,7 +274,7 @@ class Client extends Ldap
 			});
 		}
 
-		return $this->bindDeferred->promise();
+		return Timer\timeout($this->deferred->promise(), $this->options['timeout'], $this->loop);
 	}
 
 	public function unbind()
@@ -302,10 +286,16 @@ class Client extends Ldap
 
 	public function startTLS()
 	{
+		$this->deferred = new Deferred();
+
+		$this->connect()->then(function () use ($bind_rdn, $bind_password) {
 		$startTLS = '1.3.6.1.4.1.1466.20037';
+		$result = new Result();
+		$this->requests[$this->messageID] = $result;
 		$this->sendldapmessage(self::LDAPMessage(self::extendedReq, "\x80" . self::len($startTLS) . $startTLS));
-		if ($this->result()
-			|| !stream_socket_enable_crypto($this->fd, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) return $this->handleresult(0, 1234567890 , "startTLS failed");
+		});
+
+		return Timer\timeout($this->deferred->promise(), $this->options['timeout'], $this->loop);
 	}
 
 	public function search($base, $filter, $attributes = array())
@@ -327,6 +317,7 @@ class Client extends Ldap
 		return $result;
 	}
 
+	/*
 	public function nextentry()
 	{
 		unset($this->cookie);
@@ -355,6 +346,7 @@ class Client extends Ldap
 		}
 		return $res;
 	}
+	*/
 
 	public function modify($dn, $changes)
 	{ # $changes is array of mods
