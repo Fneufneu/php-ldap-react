@@ -8,6 +8,7 @@ use React\Socket\Connector;
 use React\Promise;
 use React\Promise\Deferred;
 use Fneufneu\React\Ldap\Result;
+use Fneufneu\React\Ldap\Parser;
 
 class Client extends Ldap
 {
@@ -27,8 +28,8 @@ class Client extends Ldap
 	private $buffer;
 	private $bindDeferred;
 	private $requests;
+	private $parser;
 
-	// function __construct($server, $dn = null, $pw = null)
 	function __construct(LoopInterface $loop, string $uri, $options = array())
 	{
 		parent::__construct();
@@ -46,6 +47,8 @@ class Client extends Ldap
 			$this->connector = new Connector($loop);
 		}
 
+		$this->parser = new Parser();
+		$this->buffer = '';
 		$this->connected = false;
 		$this->uri = $uri;
 	}
@@ -145,39 +148,34 @@ class Client extends Ldap
 	
 	public function handleData($data)
 	{
-		printf("handleData (%d bytes)".PHP_EOL, strlen($data));
-		$pdu = substr($data, 0, 2);
-		$data = substr($data, 2);
-		$lenlen = ord($pdu[1]);
-		if ($lenlen > 0x80) {
-			$pdu .= substr($data, 0, $lenlen - 0x80);
-			$data = substr($data, $lenlen - 0x80);
+		if ($this->buffer != '') {
+			$data = $this->buffer . $data;
+			$this->buffer = '';
 		}
-		$i = 1;
-		$len = self::ber_valuelength($pdu, $i);
-		$prelen = strlen($pdu);
-		$pdu .= substr($data, 0, $len);
-		$data = substr($data, $len);
-		#self::dump($pdu);
-		$message = self::berdecode($pdu, $prelen + $len);
-		$message = $this->pretty($message);
-		//var_dump($message);
+		printf("handleData (%d bytes)".PHP_EOL, strlen($data));
+		$message = $this->parser->decode($data);
+		if (!$message) {
+			// incomplet data
+			$this->buffer = $data;
+			return;
+		}
 
 		$result = $this->requests[$message['messageID']];
 		if ($message['protocolOp'] == 'bindResponse') {
 			if (0 != $message['resultCode']) {
 				$this->bindDeferred->reject(new \RuntimeException($message['diagnosticMessage']));
 			} else {
-				var_dump($message);
 				$this->bindDeferred->resolve();
 			}
+		} elseif (0 != $message['resultCode']) {
+			$result->emit('error', array(new \RuntimeException($message['diagnosticMessage'])));
 		} elseif ($message['protocolOp'] == 'searchResEntry') {
-			//$this->emit('data', array(self::searchResEntry($message)));
 			$message = self::searchResEntry($message);
 			$result->data[] = $message;
 			$result->emit('data', array($message));
+			//$this->emit('data', array($message));
 		} else {
-			var_dump($message);
+			//var_dump($message);
 			//$result-> = $message['resultCode'];
 			if ($result) {
 				$result->emit('end', array($result->data));
@@ -227,7 +225,6 @@ class Client extends Ldap
 		$streamRef =& $this->stream;
 	 	$promise = $this->connector->connect("$transport$address:$port")
 			->then(function (\React\Socket\ConnectionInterface $stream) use (&$streamRef) {
-				echo "connector->connec()->then()".PHP_EOL;
 				$streamRef = $stream;
 				$stream->on('data', array($this, 'handleData'));
 				$stream->on('end', function () {
@@ -277,7 +274,6 @@ class Client extends Ldap
 
 	public function bind($bind_rdn = NULL, $bind_password = NULL)
 	{
-		echo "bind()".PHP_EOL;
 		$this->bindDeferred = new Deferred();
 		/* TODO timeout but need $loop
 		$loop->addTimer(3, function () {

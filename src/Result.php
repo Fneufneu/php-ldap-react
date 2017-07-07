@@ -10,7 +10,7 @@ class Result extends EventEmitter
 
 	public function __construct()
 	{
-		;
+		$this->data = array();
 	}
 }
 
