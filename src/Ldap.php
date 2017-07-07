@@ -4,6 +4,7 @@ namespace Fneufneu\React\Ldap;
 
 use phpseclib\Math\BigInteger;
 use Evenement\EventEmitter;
+use phpseclib\File\ASN1;
 
 class Ber extends EventEmitter
 {
@@ -127,12 +128,7 @@ class Ber extends EventEmitter
 
 	static function len($i)
 	{
-		$i = strlen($i);
-		if ($i <= 127) $res = pack('C', $i);
-		elseif ($i <= 255) $res = pack('CC', 0x81, $i);
-		elseif ($i <= 65535) $res = pack('Cn', 0x82, $i);
-		else $res = pack('CN', 0x84, $i);
-		return $res;
+		return ASN1::_encodeLength(strlen($i));
 	}
 
 	static function dump($pdu)
