@@ -70,10 +70,8 @@ $client->startTLS()->then(function () use ($client, $loop) {
 		$results2->on('data', $print_data);
 		$results2->on('end', $print_end);
 		$results3->on('data', $print_data);
-		$results3->on('end', function ($data) use ($client) {
-			printf('nb result: %d'.PHP_EOL, count($data));
-			$client->unbind();
-		});
+		$results3->on('end', $print_end);
+		$client->unbind();
 	}, function ($e) use ($loop) {
 		echo "bind failed: ".$e->getMessage().PHP_EOL;
 		$loop->stop();
