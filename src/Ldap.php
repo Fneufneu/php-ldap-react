@@ -195,7 +195,7 @@ class Ldap extends Ber
 	const compareFalse = 5;
 	const compareTrue = 6;
 
-	protected $messageID = 0;
+	protected $messageID = 1;
 	protected $int2protocolOp = array(
 		'bindRequest', 'bindResponse', 'unbindRequest', 'searchRequest', 'searchResEntry', 'searchResDone', 'modifyRequest', 'modifyResponse',
 		'addRequest', 'addResponse', 'delRequest', 'delResponse', 'modDNRequest', 'modDNResponse', 'compareRequest', 'compareResponse',
@@ -227,6 +227,68 @@ class Ldap extends Ber
 		return $message;
 	}
 
+	static function filter($filter)
+	{
+		# extensibleMatch not supported ...
+		if (!preg_match("/^\(.*\)$/", $filter)) $filter = '(' . $filter . ')';
+		$elements = preg_split("/(\(|\)|~=|>=|<=|=\*\)|\*|=|&|\||!|\\\\[a-z0-9]{2})/i", $filter, -1, PREG_SPLIT_DELIM_CAPTURE + PREG_SPLIT_NO_EMPTY);
+		$i = 0;
+		$res = self::dofilter($elements, $i);
+		if ($i - sizeof($elements) != 1)
+			throw new \InvalidArgumentException("Unmatched ) or (  in filter: $filter");
+		return self::filter2ber($res);
+	}
+
+	static function dofilter(&$elements, &$i)
+	{
+		$res = array();
+		while ($element = $elements[$i++]) {
+			$unescapedelement = $element;
+			if (preg_match("/^\\\\([0-9a-z]{2})$/i", $element, $d)) {
+				$unescapedelement = chr(hexdec($d[1]));
+			}
+			if ($element == '(') $res['filters'][] = self::dofilter($elements, $i);
+			elseif ($element == ')') break;
+			elseif (in_array($element, array('&', '|', '!'))) $res['op'] = $element;
+			elseif (in_array($element, array('=', '~=', '>=', '<=', '=*)'))) {
+				$res['filtertype'] = $element;
+				if ($element == '=*)') break;
+			} elseif ($element == '*') {
+				$res['filtertype'] = $element;
+				unset($res['final']);
+				unset($res['assertionValue']);
+			} elseif ($res['filtertype'] == '*') $res['final'] .= $res['any'][] .= $unescapedelement;
+			elseif ($res['filtertype']) $res['initial'] = $res['assertionValue'] .= $unescapedelement;
+			else $res['attributeDesc'] .= $unescapedelement;
+		}
+		if ($res['final']) array_pop($res['any']);
+		return $res;
+	}
+
+	static function filter2ber($filter)
+	{
+		#print_r($filter);
+		$ops = array('&' => "\xa0", '|' => "\xa1", '!' => "\xa2", '*' => "\xa4", '=' => "\xa3", '~=' => "\xa8", '>=' => '\xa5', '<=' => "\xa6",);
+		foreach ($filter['filters'] as $f) {
+			if ($f['op']) $res .= self::filter2ber($f);
+			else {
+				if ('=*)' == $f['filtertype']) {
+					$res .= self::choice(7) . self::len($f['attributeDesc']) . $f['attributeDesc'];
+				} elseif ('*' == $f['filtertype']) {
+					$payload = $f['initial'] ? "\x80" . self::len($f['initial']) . $f['initial'] : '';
+					foreach ((array)$f['any'] as $any) $payload .= "\x81" . self::len($any) . $any;
+					$payload .= $f['final'] ? "\x82" . self::len($f['final']) . $f['final'] : '';
+					$payload = self::octetstring($f['attributeDesc']) . self::sequence($payload);
+					$res .= "\xa4" . self::len($payload) . $payload;
+				} else {
+					$payload = self::octetstring($f['attributeDesc']) . self::octetstring($f['assertionValue']);
+					$res .= $ops[$f['filtertype']] . self::len($payload) . $payload;
+				}
+			}
+		}
+		if ($op = $filter['op']) return $ops[$op] . self::len($res) . $res;
+		return $res;
+	}
 	static function control($controlType, $criticality = false, $controlValue = '')
 	{
 		return self::octetstring($controlType) . ($criticality ? self::boolean($criticality) : '') . self::octetstring($controlValue);
