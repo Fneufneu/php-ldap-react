@@ -88,7 +88,7 @@ class Client extends EventEmitter
 		} elseif ($message['protocolOp'] == 'extendedResp') {
 			$streamEncryption = new \React\Socket\StreamEncryption($this->loop, false);
 			$streamEncryption->enable($this->stream)->then(function () {
-				$this->deferred->resolve();
+				$this->startTlsDeferred->resolve();
 			});
 		} elseif ($message['protocolOp'] == 'searchResEntry') {
 			$message = $this->searchResEntry($message);
@@ -196,14 +196,14 @@ class Client extends EventEmitter
 
 	public function startTLS()
 	{
-		$this->deferred = new Deferred();
+		$this->startTlsDeferred = new Deferred();
 
 		$this->connect()->done(function () use ($bind_rdn, $bind_password) {
 			$starttls = new Request\StartTls($this->messageID++);
 			$this->queueRequest($starttls);
 		});
 
-		return Timer\timeout($this->deferred->promise(), $this->options['timeout'], $this->loop);
+		return Timer\timeout($this->startTlsDeferred->promise(), $this->options['timeout'], $this->loop);
 	}
 
 	/**
@@ -211,9 +211,7 @@ class Client extends EventEmitter
 	 */
 	public function search($options)
 	{
-		echo "new Request\Search\n";
 		$request = new Request\Search($this->messageID++, $options);
-		echo "Request\Search OK\n";
 
 		return $this->queueRequest($request);
 	}
@@ -221,7 +219,6 @@ class Client extends EventEmitter
 	private function queueRequest($request)
 	{
 		$this->asyncRequests->enqueue($request);
-		printf("asyncRequests=%d\n", $this->asyncRequests->count());
 		$result = new Result();
 		$this->requests[$request->messageId] = $result;
 		$this->pollRequests();
@@ -238,7 +235,6 @@ class Client extends EventEmitter
 			return;
 		if ('' != $this->expectedAnswer)
 			return;
-		echo ".".PHP_EOL;
 
 		$request = $this->asyncRequests->dequeue();
 		$this->expectedAnswer = $request->expectedAnswer;
@@ -276,59 +272,38 @@ class Client extends EventEmitter
 	*/
 
 	public function modify($dn, $changes)
-	{ # $changes is array of mods
-		$ops = array('add' => 0, 'delete' => 1, 'replace' => 2);
-		$pdu = '';
-		foreach ($changes as $operation) {
-			foreach ($operation as $type => $modification) {
-				$pdu = "";
-				foreach ($modification as $attributeDesc => $attributeValues) {
-					foreach ($attributeValues as $attributeValue) {
-						$pdu .= self::octetstring($attributeValue);
-					}
-					$pdu = self::sequence(self::octetstring($attributeDesc) . self::set($pdu));
-				}
-				$pdux .= self::sequence(self::enumeration($ops[$type]) . $pdu);
-			}
-		}
-		$pdu = self::LDAPMessage(self::modifyRequest, self::octetstring($dn) . self::sequence($pdux));
-		return $this->sendldapmessage($pdu);
+	{
+		$request = new Request\Modify($this->messageID++, $dn, $changes);
+
+		return $this->queueRequest($request);
 	}
 
 	public function add($entry, $attributes)
 	{
-		foreach ($attributes as $attributeDesc => $attributeValues) {
-			$pdu = '';
-			if (!is_array($attributeValues)) $attributeValues = array($attributeValues);
-			foreach ($attributeValues as $attributeValue) {
-				$pdu .= self::octetstring($attributeValue);
-			}
-			$pdux .= self::sequence(self::octetstring($attributeDesc) . self::set($pdu));
-		}
-		$pdu = self::LDAPMessage(self::addRequest, self::octetstring($entry) . self::sequence($pdux));
-		return $this->sendldapmessage($pdu);
+		$request = new Request\Add($this->messageID++, $entry, $attributes);
+
+		return $this->queueRequest($request);
 	}
 
-	public function del($dn)
+	public function delete($dn)
 	{
-		$pdu = self::sequence(self::integer($this->messageID++) . self::application(self::delRequest, $dn, false));
-		return $this->sendldapmessage($pdu);
+		$request = new Request\Delete($this->messageID++, $dn);
+
+		return $this->queueRequest($request);
 	}
 
 	public function modDN($entry, $newrdn, $deleteoldrnd = true, $newsuperior = '')
 	{
-		$pdu = self::LDAPMessage(self::modDNRequest, self::octetstring($entry)
-			 . self::octetstring($newrdn)
-			 . self::boolean($deleteoldrnd)
-			 . ($newsuperior ? "\x80" . self::len($newsuperior) . $newsuperior : ''));
-		return $this->sendldapmessage($pdu);
+		$request = new Request\ModDn($this->messageID++, $newrdn, $deleteoldrnd, $newsuperior);
+
+		return $this->queueRequest($request);
 	}
 
 	public function compare($entry, $attributeDesc, $assertionValue)
 	{
-		$payload = self::sequence(self::octetstring($attributeDesc) . self::octetstring($assertionValue));
-		$pdu = self::LDAPMessage(self::compareRequest, self::octetstring($entry) .  $payload); #. "\xa3" .
-		return $this->sendldapmessage($pdu, self::compareTrue);
+		$request = new Request\Compare($this->messageID++, $entry, $attributeDesc, $assertionValue);
+
+		return $this->queueRequest($request);
 	}
 
 	public function pp($base, $filter = 'objectclass=*', $attributes = array())
