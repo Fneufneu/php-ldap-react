@@ -90,7 +90,6 @@ class Client extends EventEmitter
 			$streamEncryption->enable($this->stream)->then(function () {
 				$this->deferred->resolve();
 			});
-			return;
 		} elseif ($message['protocolOp'] == 'searchResEntry') {
 			$message = $this->searchResEntry($message);
 			$result->data[] = $message;
@@ -177,11 +176,11 @@ class Client extends EventEmitter
 
 		if ($this->connected) {
 			echo "already connected, sending bindRequest".PHP_EOL;
-			$this->sendldapmessage($request->toString());
+			$this->queueRequest($request);
 		} else {
-			$this->connect()->done(function () use ($bind_rdn, $bind_password) {
+			$this->connect()->done(function () use ($bind_rdn, $bind_password, $request) {
 				echo "connected, sending bindRequest".PHP_EOL;
-				$this->sendldapmessage($request->toString());
+				$this->queueRequest($request);
 			});
 		}
 
@@ -192,7 +191,7 @@ class Client extends EventEmitter
 	{
 		$request = new Request\Unbind($this->messageID++);
 
-		return $this->sendldapmessage($request->toString());
+		return $this->queueRequest($request);
 	}
 
 	public function startTLS()
@@ -201,9 +200,7 @@ class Client extends EventEmitter
 
 		$this->connect()->done(function () use ($bind_rdn, $bind_password) {
 			$starttls = new Request\StartTls($this->messageID++);
-			$result = new Result();
-			$this->requests[$this->messageID] = $result;
-			$this->sendldapmessage($starttls->toString());
+			$this->queueRequest($starttls);
 		});
 
 		return Timer\timeout($this->deferred->promise(), $this->options['timeout'], $this->loop);
@@ -218,6 +215,11 @@ class Client extends EventEmitter
 		$request = new Request\Search($this->messageID++, $options);
 		echo "Request\Search OK\n";
 
+		return $this->queueRequest($request);
+	}
+
+	private function queueRequest($request)
+	{
 		$this->asyncRequests->enqueue($request);
 		printf("asyncRequests=%d\n", $this->asyncRequests->count());
 		$result = new Result();
