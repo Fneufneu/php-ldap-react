@@ -179,7 +179,7 @@ class Client extends EventEmitter
 			echo "already connected, sending bindRequest".PHP_EOL;
 			$this->sendldapmessage($request->toString());
 		} else {
-			$this->connect()->then(function () use ($bind_rdn, $bind_password) {
+			$this->connect()->done(function () use ($bind_rdn, $bind_password) {
 				echo "connected, sending bindRequest".PHP_EOL;
 				$this->sendldapmessage($request->toString());
 			});
@@ -199,7 +199,7 @@ class Client extends EventEmitter
 	{
 		$this->deferred = new Deferred();
 
-		$this->connect()->then(function () use ($bind_rdn, $bind_password) {
+		$this->connect()->done(function () use ($bind_rdn, $bind_password) {
 			$starttls = new Request\StartTls($this->messageID++);
 			$result = new Result();
 			$this->requests[$this->messageID] = $result;
