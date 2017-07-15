@@ -96,7 +96,23 @@ class Client extends EventEmitter
 			$result->emit('data', array($message));
 			//$this->emit('data', array($message));
 		} else {
-			if ($result) {
+			if ($message['protocolOp'] == 'searchResDone'
+			and array_key_exists('1.2.840.113556.1.4.319', $message['controls'])) {
+				$cookie = $message['controls']['1.2.840.113556.1.4.319'];
+				if ("" != $cookie) {
+					$options = $this->savedSearchOptions[$message['messageID']];
+					$options['cookie'] = $cookie;
+					//echo "new options: ".json_encode($options).PHP_EOL;
+					$request = new Request\Search($this->messageID++, $options);
+					$this->savedSearchOptions[$request->messageId] = $options;
+					$this->asyncRequests->enqueue($request);
+					$this->requests[$request->messageId] = &$this->requests[$message['messageID']];
+					$this->pollRequests();
+				} else {
+					$result->emit('end', array($result->data));
+					unset($this->requests[$message['messageID']], $this->savedSearchOptions[$message['messageID']]);
+				}
+			} elseif ($result) {
 				$result->emit('end', array($result->data));
 				unset($this->requests[$message['messageID']]);
 			}
@@ -212,6 +228,8 @@ class Client extends EventEmitter
 	public function search($options)
 	{
 		$request = new Request\Search($this->messageID++, $options);
+		if ($options['pagesize'])
+			$this->savedSearchOptions[$request->messageId] = $options;
 
 		return $this->queueRequest($request);
 	}
@@ -240,36 +258,6 @@ class Client extends EventEmitter
 		$this->expectedAnswer = $request->expectedAnswer;
 		$this->sendldapmessage($request->toString());
 	}
-	/*
-	public function nextentry()
-	{
-		unset($this->cookie);
-		$response = $this->receiveldapmessage();
-		if ($response['protocolOp'] == 'searchResEntry')
-			return self::searchResEntry($response);
-
-		$this->status = $response;
-		$this->handleresult();
-		foreach($response['controls'] as $control) {
-			if ($control['controlType'] == '1.2.840.113556.1.4.319') {
-				$cookiepdu = $control['controlValue'];
-				$struct = self::berdecode($cookiepdu, strlen($cookiepdu));
-				$this->cookie = $struct[0]['value'][1]['value'];
-			}
-		}
-		return false;
-	}
-
-	public function getpage($base, $filter, $attributes, $paged = false)
-	{
-		if ($paged && !$this->cookie) return false;
-		$this->search($base, $filter, $attributes);
-		while ($entry = $this->nextentry()) {
-			$res[] = $entry;
-		}
-		return $res;
-	}
-	*/
 
 	public function modify($dn, $changes)
 	{
@@ -304,30 +292,5 @@ class Client extends EventEmitter
 		$request = new Request\Compare($this->messageID++, $entry, $attributeDesc, $assertionValue);
 
 		return $this->queueRequest($request);
-	}
-
-	public function pp($base, $filter = 'objectclass=*', $attributes = array())
-	{
-		$c = 0;
-		$indent = 30;
-		$paged = 0;
-		while ($entries = $this->getpage($base, $filter, $attributes, $paged++)) {
-			#continue;
-			foreach ((array)$entries as $entry) {
-				printf("\n%$indent" . "s: %s\n", 'c', $c++);
-				printf("%$indent" . "s: %s\n", 'dn', $entry['dn']);
-				unset($entry['dn']);
-				ksort($entry);
-				foreach ($entry as $attr => $vals) {
-					foreach ($vals as $val) {
-						if (preg_match("/[[:cntrl:]]/", $val)) $val = '* ' . bin2hex($val);
-						printf("%$indent" . "s: %s\n", $attr, $val);
-						$attr = '';
-					}
-				}
-			}
-		}
-		$status = $this->status();
-		if ($status['resultCode']) print_r($status);
 	}
 }

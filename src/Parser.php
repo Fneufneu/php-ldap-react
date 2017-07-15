@@ -204,10 +204,16 @@ class Parser
 			return $res;
 
 		foreach($controls['content'] as $control) {
-			$ctrl['controlType'] = $control['content'][0]['content'];
-			$ctrl['controlValue'] = $control['content'][1]['content'];
-			$res[] = $ctrl;
+			$controlType = $control['content'][0]['content'];
+			$criticality = $control['content'][1]['content'];
+			$controlValue = $control['content'][2]['content'];
+			if ('1.2.840.113556.1.4.319' == $controlType) {
+				$controlValue = $this->asn1->decodeBER($controlValue);
+				$controlValue = $controlValue[0]['content'][1]['content'];
+			}
+			$res[$controlType] = $controlValue;
 		}
+
 		return $res;
 	}
 }
