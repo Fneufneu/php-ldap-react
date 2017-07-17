@@ -49,7 +49,7 @@ class Client extends EventEmitter
 		$this->connected = false;
 		$this->uri = $uri;
 		$this->loop = $loop;
-		$this->asyncRequests = new \SplQueue();
+		$this->asyncRequests = new \SplPriorityQueue();
 	}
 
 	private function sendldapmessage($pdu, $successCode = 0)
@@ -66,11 +66,10 @@ class Client extends EventEmitter
 			$data = $this->buffer . $data;
 			$this->buffer = '';
 		}
-		//printf("handleData (%d bytes)".PHP_EOL, strlen($data));
 		$message = $this->parser->decode($data);
 		if (!$message) {
 			// incomplet data
-			$this->buffer = $data;
+			$this->buffer .= $data;
 			return;
 		}
 
@@ -105,7 +104,7 @@ class Client extends EventEmitter
 					//echo "new options: ".json_encode($options).PHP_EOL;
 					$request = new Request\Search($this->messageID++, $options);
 					$this->savedSearchOptions[$request->messageId] = $options;
-					$this->asyncRequests->enqueue($request);
+					$this->asyncRequests->insert($request, 0);
 					$this->requests[$request->messageId] = &$this->requests[$message['messageID']];
 					$this->pollRequests();
 				} else {
@@ -122,7 +121,6 @@ class Client extends EventEmitter
 			$this->pollRequests();
 		}
 
-		//printf('data left: %d bytes'.PHP_EOL, strlen($data));
 		if (strlen($data) > 0)
 			$this->handleData($data);
 		
@@ -192,11 +190,11 @@ class Client extends EventEmitter
 
 		if ($this->connected) {
 			echo "already connected, sending bindRequest".PHP_EOL;
-			$this->queueRequest($request);
+			$this->queueRequest($request, 0);
 		} else {
 			$this->connect()->done(function () use ($bind_rdn, $bind_password, $request) {
 				echo "connected, sending bindRequest".PHP_EOL;
-				$this->queueRequest($request);
+				$this->queueRequest($request, 0);
 			});
 		}
 
@@ -207,7 +205,7 @@ class Client extends EventEmitter
 	{
 		$request = new Request\Unbind($this->messageID++);
 
-		return $this->queueRequest($request);
+		return $this->queueRequest($request, PHP_INT_MIN);
 	}
 
 	public function startTLS()
@@ -234,9 +232,11 @@ class Client extends EventEmitter
 		return $this->queueRequest($request);
 	}
 
-	private function queueRequest($request)
+	private function queueRequest($request, $priority = null)
 	{
-		$this->asyncRequests->enqueue($request);
+		if (is_null($priority))
+			$priority = 0 - $request->messageId;
+		$this->asyncRequests->insert($request, $priority);
 		$result = new Result();
 		$this->requests[$request->messageId] = $result;
 		$this->pollRequests();
@@ -254,7 +254,7 @@ class Client extends EventEmitter
 		if ('' != $this->expectedAnswer)
 			return;
 
-		$request = $this->asyncRequests->dequeue();
+		$request = $this->asyncRequests->extract();
 		$this->expectedAnswer = $request->expectedAnswer;
 		$this->sendldapmessage($request->toString());
 	}
