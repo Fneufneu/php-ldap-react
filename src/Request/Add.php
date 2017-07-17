@@ -2,6 +2,7 @@
 
 namespace Fneufneu\React\Ldap\Request;
 
+use Fneufneu\React\Ldap\Ber;
 use Fneufneu\React\Ldap\Request;
 
 class Add extends Request
@@ -12,12 +13,12 @@ class Add extends Request
 			$pdu = '';
 			if (!is_array($attributeValues)) $attributeValues = array($attributeValues);
 			foreach ($attributeValues as $attributeValue) {
-				$pdu .= self::octetstring($attributeValue);
+				$pdu .= Ber::octetstring($attributeValue);
 			}
-			$pdux .= self::sequence(self::octetstring($attributeDesc) . self::set($pdu));
+			$pdux .= Ber::sequence(Ber::octetstring($attributeDesc) . Ber::set($pdu));
 		}
 		$protocolOp = self::addRequest;
-		$pdu = self::octetstring($entry) . self::sequence($pdux);
+		$pdu = Ber::octetstring($entry) . Ber::sequence($pdux);
 
 		parent::__construct($messageId, $protocolOp, $pdu);
 	}

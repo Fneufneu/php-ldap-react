@@ -2,6 +2,7 @@
 
 namespace Fneufneu\React\Ldap\Request;
 
+use Fneufneu\React\Ldap\Ber;
 use Fneufneu\React\Ldap\Request;
 
 class Delete extends Request
@@ -9,8 +10,8 @@ class Delete extends Request
 	public function __construct($messageId, $dn)
 	{
 		$this->expectedAnswer = 'delResponse';
-		$this->message = self::sequence(self::integer($this->messageID++)
-			. self::application(self::delRequest, $dn, false));
+		$this->message = Ber::sequence(Ber::integer($this->messageID++)
+			. Ber::application(self::delRequest, $dn, false));
 	}
 
 }

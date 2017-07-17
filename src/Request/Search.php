@@ -2,6 +2,7 @@
 
 namespace Fneufneu\React\Ldap\Request;
 
+use Fneufneu\React\Ldap\Ber;
 use Fneufneu\React\Ldap\Request;
 
 class Search extends Request
@@ -21,12 +22,12 @@ class Search extends Request
 		$options += $this->options;
 
 		$protocolOp = self::searchRequest;
-		$pdu = self::octetstring($options['base'])
-			 . self::enumeration($options['scope'])
-			 . self::enumeration($options['derefaliases'])
-			 . self::integer($options['sizelimit'])
-			 . self::integer($options['timelimit'])
-			 . self::boolean($options['typesonly'])
+		$pdu = Ber::octetstring($options['base'])
+			 . Ber::enumeration($options['scope'])
+			 . Ber::enumeration($options['derefaliases'])
+			 . Ber::integer($options['sizelimit'])
+			 . Ber::integer($options['timelimit'])
+			 . Ber::boolean($options['typesonly'])
 			 . self::filter($options['filter'])
 			 . self::attributes($options['attributes']);
 		$controls = '';

@@ -2,6 +2,7 @@
 
 namespace Fneufneu\React\Ldap;
 
+use Fneufneu\React\Ldap\Ber;
 
 class Request extends Ldap
 {
@@ -32,9 +33,9 @@ class Request extends Ldap
 
 	protected function requestLdapMessage($messageId, $protocolOp, $pdu, $controls = '')
 	{
-		return self::sequence(self::integer($messageId)
-			. self::application($protocolOp, $pdu)
-			. ($controls ? "\xA0" . self::len($controls) . $controls : ''));
+		return Ber::sequence(Ber::integer($messageId)
+			. Ber::application($protocolOp, $pdu)
+			. ($controls ? "\xA0" . Ber::len($controls) . $controls : ''));
 	}
 
 	public function toString()

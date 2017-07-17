@@ -2,157 +2,12 @@
 
 namespace Fneufneu\React\Ldap;
 
+use Fneufneu\React\Ldap\Ber;
 use phpseclib\Math\BigInteger;
 use Evenement\EventEmitter;
 use phpseclib\File\ASN1;
 
-class Ber extends EventEmitter
-{
-	const universal	 = 0x00;
-	const application   = 0x40;
-	const context	   = 0x80;
-	const private_	  = 0xc0;
-
-	static function berdecode($buffer, $maxlen)
-	{
-		$i = 0;
-		return self::berdecode_($buffer, $i, $maxlen);
-	}
-
-	static function berdecode_($buffer, &$i, $maxlen)
-	{
-		$res = array();
-		while ($i < $maxlen) {
-			$byte = ord($buffer[$i++]);
-			$struct = array();
-			$tag = $struct['tag'] = $byte & 0x1f;
-			$class = $struct['class'] = $byte & 0xc0;
-			$constructed = $struct['constructed'] = $byte & 0x20;
-			$len = $struct['len'] = self::ber_valuelength($buffer, $i);
-			if ($constructed) {
-				$struct['value'] = self::berdecode_($buffer, $i, $len + $i);
-			} else {
-				$value = substr($buffer, $i, $len);
-				if ($class != 64) {
-					if ($tag == 2 || $tag == 10) { # ints and enums
-						$value = new BigInteger($value, 256);
-						$value = $value->toString();
-					} elseif ($tag == 1) {
-						$value = ord($value) != 0;
-					}
-				}
-				$struct['value'] = $value;
-				$struct['value_'] = bin2hex($struct['value']);
-				$i += $len;
-			}
-			$res[] = $struct;
-		}
-		return $res;
-	}
-
-	static function ber_valuelength($buffer, &$i)
-	{
-		$byte = ord($buffer[$i++]);
-		$len = $byte & 0x7f;
-		if ($byte > 0x80) {
-			$res = 0;
-			for ($c = 0; $c < $len; $c++) {
-				$res = $res * 256 + ord($buffer[$i++]);
-			}
-		} else {
-			$res = $len;
-		}
-		return $res;
-	}
-
-	static function sequence($pdu)
-	{
-		return "\x30" . self::len($pdu) . $pdu;
-	}
-
-	static function set($pdu)
-	{
-		return "\x31" . self::len($pdu) . $pdu;
-	}
-
-	static function application($no, $pdu, $constructed = true)
-	{
-		return pack('C', self::application | $no | ($constructed ? 0x20 : 0)) . self::len($pdu) . $pdu;
-	}
-
-	static function boolean($i)
-	{
-		return "\x01\x01" . ($i ? "\xff" : "\x00");
-	}
-
-	static function integer($i)
-	{
-		return "\x02" . self::int($i);
-	}
-
-	static function octetstring($s)
-	{
-		return "\x04" . self::len($s) . $s;
-	}
-
-	static function contextstring($no, $s)
-	{
-		return pack('C', self::context | $no) . self::len($s) . $s;
-	}
-
-	static function context($no)
-	{
-		return pack('C', self::context | $no | 0x20);
-	}
-
-	static function enumeration($i)
-	{
-		return "\x0a" . self::int($i);
-	}
-
-	static function choice($no)
-	{
-		return pack('C', self::context | $no);
-	}
-
-	static function int($i)
-	{
-		# for now only supports positive integers
-		#return pack('CN', 0x04, $i);
-		if ($i <= 255) $res = pack('CC', 0x01, $i);
-		elseif ($i <= 32767) $res = pack('Cn', 0x02, $i);
-		else $res = pack('CN', 0x04, $i);
-		return $res;
-	}
-
-
-	static function len($i)
-	{
-		return ASN1::_encodeLength(strlen($i));
-	}
-
-	static function dump($pdu)
-	{
-		$i = 0;
-		foreach ((array)str_split($pdu) as $x) {
-			$c = $i % 16;
-			if ($c == 0) printf("\n  %04x:  ", $i);
-			if ($c == 8) print " ";
-			printf("%02x ", ord($x));
-			if ($x > ' ' && $x <= '~') $xtra .= $x;
-			else $xtra .= ".";
-			if ($c == 15) {
-				print "  " . $xtra;
-				$xtra = "";
-			}
-			$i++;
-		}
-		if ($c != 15) print "  " . str_repeat('   ', 15 - $c) . $xtra;
-		print "\n";
-	}
-}
-
-class Ldap extends Ber
+class Ldap
 {
 	const version3 = 3;
 
@@ -211,22 +66,6 @@ class Ldap extends Ber
 		$this->protocolOp2int = array_flip($this->int2protocolOp);
 	}
 	
-	protected function receiveldapmessage()
-	{
-		$pdu = fread($this->fd, 2);
-		if ($pdu == '') throw new Exception('timeout on socket');
-		$lenlen = ord($pdu[1]);
-		if ($lenlen > 0x80) { $pdu .= fread($this->fd, $lenlen - 0x80); }
-		$i = 1;
-		$len = self::ber_valuelength($pdu, $i);
-		$prelen = strlen($pdu);
-		$pdu .= fread($this->fd, $len);
-		#self::dump($pdu);
-		$message = self::berdecode($pdu, $prelen + $len);
-		$message = $this->pretty($message);
-		return $message;
-	}
-
 	static function filter($filter)
 	{
 		# extensibleMatch not supported ...
@@ -273,48 +112,48 @@ class Ldap extends Ber
 			if ($f['op']) $res .= self::filter2ber($f);
 			else {
 				if ('=*)' == $f['filtertype']) {
-					$res .= self::choice(7) . self::len($f['attributeDesc']) . $f['attributeDesc'];
+					$res .= Ber::choice(7) . Ber::len($f['attributeDesc']) . $f['attributeDesc'];
 				} elseif ('*' == $f['filtertype']) {
-					$payload = $f['initial'] ? "\x80" . self::len($f['initial']) . $f['initial'] : '';
-					foreach ((array)$f['any'] as $any) $payload .= "\x81" . self::len($any) . $any;
-					$payload .= $f['final'] ? "\x82" . self::len($f['final']) . $f['final'] : '';
-					$payload = self::octetstring($f['attributeDesc']) . self::sequence($payload);
-					$res .= "\xa4" . self::len($payload) . $payload;
+					$payload = $f['initial'] ? "\x80" . Ber::len($f['initial']) . $f['initial'] : '';
+					foreach ((array)$f['any'] as $any) $payload .= "\x81" . Ber::len($any) . $any;
+					$payload .= $f['final'] ? "\x82" . Ber::len($f['final']) . $f['final'] : '';
+					$payload = Ber::octetstring($f['attributeDesc']) . Ber::sequence($payload);
+					$res .= "\xa4" . Ber::len($payload) . $payload;
 				} else {
-					$payload = self::octetstring($f['attributeDesc']) . self::octetstring($f['assertionValue']);
-					$res .= $ops[$f['filtertype']] . self::len($payload) . $payload;
+					$payload = Ber::octetstring($f['attributeDesc']) . Ber::octetstring($f['assertionValue']);
+					$res .= $ops[$f['filtertype']] . Ber::len($payload) . $payload;
 				}
 			}
 		}
-		if ($op = $filter['op']) return $ops[$op] . self::len($res) . $res;
+		if ($op = $filter['op']) return $ops[$op] . Ber::len($res) . $res;
 		return $res;
 	}
 	static function control($controlType, $criticality = false, $controlValue = '')
 	{
-		return self::octetstring($controlType) . ($criticality ? self::boolean($criticality) : '') . self::octetstring($controlValue);
+		return Ber::octetstring($controlType) . ($criticality ? Ber::boolean($criticality) : '') . Ber::octetstring($controlValue);
 	}
 
 	protected function attributes($attributes)
 	{
 		foreach ($attributes as $attribute) {
-			$pdu .= self::octetstring($attribute);
+			$pdu .= Ber::octetstring($attribute);
 		}
-		return self::sequence($pdu);
+		return Ber::sequence($pdu);
 	}
 
 	protected function LDAPMessage($protocolOp, $pdu, $controls = '')
 	{
-		return self::sequence(self::integer($this->messageID++) . self::application($protocolOp, $pdu) . ($controls ? "\xA0" . self::len($controls) . $controls : ''));
+		return Ber::sequence(Ber::integer($this->messageID++) . Ber::application($protocolOp, $pdu) . ($controls ? "\xA0" . Ber::len($controls) . $controls : ''));
 	}
 
 	static function matchedValuesControl($filter = '', $criticality = false)
 	{
-		return self::sequence(self::control('1.2.826.0.1.3344810.2.3', $criticality, self::sequence($filter)));
+		return Ber::sequence(self::control('1.2.826.0.1.3344810.2.3', $criticality, Ber::sequence($filter)));
 	}
 
 	static function pagedResultsControl($size, $cookie = '', $criticality = false)
 	{
-		return self::sequence(self::control('1.2.840.113556.1.4.319', $criticality, self::sequence(self::integer($size) . self::octetstring($cookie))));
+		return Ber::sequence(self::control('1.2.840.113556.1.4.319', $criticality, Ber::sequence(Ber::integer($size) . Ber::octetstring($cookie))));
 	}
 
 	public function pretty($message) {
