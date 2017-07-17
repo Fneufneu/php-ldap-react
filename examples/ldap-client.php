@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../src/Ber.php';
 require __DIR__ . '/../src/Parser.php';
 require __DIR__ . '/../src/Ldap.php';
 require __DIR__ . '/../src/Result.php';
