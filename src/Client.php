@@ -141,36 +141,30 @@ class Client extends EventEmitter
 	{
 		$url = $this->options['uri'];
 
-		$defaultport = array(null => '389', 'ldap' => '389', 'ldaps' => '636', 'ldaptls' => '389');
 		if (! preg_match('/^(?:(ldap(?:|s|tls))(?::\/\/))?(.+?):?(\d+)?$/', $url, $d)) {
 			throw new \InvalidArgumentException('invalid uri: '.$url);
 		}
+
+		$defaultport = array(null => '389', 'ldap' => '389', 'ldaps' => '636', 'ldaptls' => '389');
 		list($dummy, $protocol, $address, $port) = $d;
 		if (!$port)
 			$port = $defaultport[$protocol];
-		$transport = $protocol == 'ldaps' ? 'tls://' : 'tcp://';
-		#print_r("$transport$address:$port");
 
-		// TODO
-		//if ($protocol == 'ldaptls')
-		//	return $this->startTLS();
+		$starttls = $protocol === 'ldaptls';
+		$transport = $protocol === 'ldaps' ? 'tls://' : 'tcp://';
 
-		$streamRef =& $this->stream;
 	 	$promise = $this->connector->connect("$transport$address:$port")
-			->then(function (\React\Socket\ConnectionInterface $stream) use (&$streamRef) {
-				$streamRef = $stream;
-				$stream->on('data', array($this, 'handleData'));
-				$stream->on('end', function () {
-					echo "connection ended".PHP_EOL;
-				});
-				$stream->on('close', function () {
-					echo "connection closed".PHP_EOL;
+			->then(function (\React\Socket\ConnectionInterface $stream) {
+				$this->stream = $stream;
+				$stream->on('data', [$this, 'handleData']
+				)->on('end', function () {
 					$this->connected = false;
 					$this->emit('end');
-				});
-				$stream->on('error', function (Exception $e) {
-					echo "connection error ".$e->getMessage().PHP_EOL;
-					$this->emit('error', array($e));
+				})->on('error', function (\Exception $e) {
+					$this->emit('error', [$e]);
+				})->on('close', function () {
+					$this->connected = false;
+					$this->emit('close');
 				});
 				$this->connected = true;
 				$this->pollRequests();
@@ -178,6 +172,9 @@ class Client extends EventEmitter
 				echo "error: ".$error->getMessage().PHP_EOL;
 				$this->deferred->reject($error);
 			});
+
+		if ($starttls)
+			$promise = $this->startTLS($promise);
 
 		return $promise;
 	}
@@ -208,16 +205,16 @@ class Client extends EventEmitter
 		return $this->queueRequest($request, PHP_INT_MIN);
 	}
 
-	public function startTLS()
+	protected function startTLS($promise)
 	{
 		$this->startTlsDeferred = new Deferred();
 
-		$this->connect()->done(function () use ($bind_rdn, $bind_password) {
+		$promise->done(function () {
 			$starttls = new Request\StartTls($this->messageID++);
 			$this->queueRequest($starttls);
 		});
 
-		return Timer\timeout($this->startTlsDeferred->promise(), $this->options['timeout'], $this->loop);
+		return $this->startTlsDeferred->promise();
 	}
 
 	/**

@@ -30,53 +30,51 @@ $client->on('end', function () use ($loop) {
 	echo "client end".PHP_EOL;
 	$loop->stop();
 });
-$client->startTLS()->then(function () use ($client, $loop) {
-	$client->bind('blabla', 'blabla75')->then(function () use ($client, $loop) {
-		echo "binded\n";
-		$results = $client->search([
-			'base' => "cn=blabla",
-			'filter' => "(&(uid=*)(mail=y*))",
-			'attributes' => ['uid', 'cn', 'mail'],
-		]);
-		$results2 = $client->search([
-			'base' => "cn=blabla",
-			'filter' => "(&(uid=*)(mail=m*))",
-			'attributes' => ['uid', 'cn', 'mail'],
-		]);
-		$results3 = $client->search([
-			'base' => "cn=blabla",
-			'filter' => "(&(uid=*)(mail=a*))",
-			'attributes' => ['uid', 'cn', 'mail'],
-		]);
+$client->bind('blabla', 'blabla75')->then(function () use ($client, $loop) {
+	echo "binded\n";
+	$results = $client->search([
+		'base' => "cn=blabla",
+		'filter' => "(&(uid=*)(mail=y*))",
+		'attributes' => ['uid', 'cn', 'mail'],
+	]);
+	$results2 = $client->search([
+		'base' => "cn=blabla",
+		'filter' => "(&(uid=*)(mail=m*))",
+		'attributes' => ['uid', 'cn', 'mail'],
+	]);
+	$results3 = $client->search([
+		'base' => "cn=blabla",
+		'filter' => "(&(uid=*)(mail=a*))",
+		'attributes' => ['uid', 'cn', 'mail'],
+	]);
 
-		$print_data = function ($data) {
-			static $h = false;
-			if (!$h) {
-				$h = true;
-				echo "|";
-				foreach ($data as $k => $v)
-					printf(" %'. 22s |", $k);
-				echo PHP_EOL;
-			}
+	$print_data = function ($data) {
+		static $h = false;
+		if (!$h) {
+			$h = true;
 			echo "|";
 			foreach ($data as $k => $v)
-				printf(" %'. 22s |", $v);
+				printf(" %'. 22s |", $k);
 			echo PHP_EOL;
-		};
-		$print_end = function ($data) {
-			printf('nb result: %d'.PHP_EOL, count($data));
-		};
-		$results->on('data', $print_data);
-		$results->on('end', $print_end);
-		$results2->on('data', $print_data);
-		$results2->on('end', $print_end);
-		$results3->on('data', $print_data);
-		$results3->on('end', $print_end);
-		$client->unbind();
-	}, function ($e) use ($loop) {
-		echo "bind failed: ".$e->getMessage().PHP_EOL;
-		$loop->stop();
-	});
+		}
+		echo "|";
+		foreach ($data as $k => $v)
+			printf(" %'. 22s |", $v);
+		echo PHP_EOL;
+	};
+	$print_end = function ($data) {
+		printf('nb result: %d'.PHP_EOL, count($data));
+	};
+	$results->on('data', $print_data);
+	$results->on('end', $print_end);
+	$results2->on('data', $print_data);
+	$results2->on('end', $print_end);
+	$results3->on('data', $print_data);
+	$results3->on('end', $print_end);
+	$client->unbind();
+}, function ($e) use ($loop) {
+	echo "bind failed: ".$e->getMessage().PHP_EOL;
+	$loop->stop();
 });
 
 $loop->run();
