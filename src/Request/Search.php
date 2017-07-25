@@ -9,6 +9,7 @@ class Search extends Request
 {
 	private $options = array(
 		'cookie' => '',
+		'filter' => '(objectclass=*)',
 		'pagesize' => 0,
 		'resultfilter' => '',
 		'scope' => self::wholeSubtree,
