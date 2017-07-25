@@ -21,16 +21,16 @@ $loop->run();
 ## Client usage
 
 The `Client` class is the main class in this package that let you connect to
-a LDAP Serveur.
+a LDAP Server.
 
 ```php
 $client = new Client($loop, 'ldap://host', $options);
 ```
 
-The constructor need an [`EventLoop`](https://github.com/reactphp/event-loop)
-an URI to the LDAP host (`ldap://myhost.com:389`, `ldaptls://yourhost.fr`, `ldaps://mycomp.com`)
-Supported protocol: ldap, ldaptls and ldaps.
-an optional array of options
+The constructor needs
+- an [`EventLoop`](https://github.com/reactphp/event-loop)
+- an URI to the LDAP host (`ldap://myhost.com:389`, `ldaptls://yourhost.fr`, `ldaps://mycomp.com`)
+- an optional array of options
 
 ### Supported options
 
@@ -59,7 +59,7 @@ $client->on('error', function (Exception) {
 
 ### bind()
 
-bind call connect(), bind and return a promise.
+bind call connect() and return a promise.
 
 ```php
 $client->bind('toto', 'password')->done(function ($client) {
@@ -72,15 +72,14 @@ $client->bind('toto', 'password')->done(function ($client) {
 ### unbind()
 
 Send an unbind() request to the server.
+
 The server will usually disconnect the client just after.
 
 ### search()
 
 Performs a ldap_search and return a Result object see [Result usage](#result-usage)
-Takes an array of options for all the parameters.
-```php
-$result = $client->search(array $options);
-```
+
+The `search(array): Result` method takes an array of options.
 
 | option | type | default value | description |
 | ------ | ---- | ------- | ------ |
@@ -91,26 +90,82 @@ $result = $client->search(array $options);
 | pagesize | int | 0 | enable automatic paging |
 | sizelimit | int | 0 | Enables you to limit the count of entries fetched. Setting this to 0 means no limit |
 | timelimit | int | 0 | Sets the number of seconds how long is spend on the search. Setting this to 0 means no limit |
-| typesonly | bool | false | set to true if only attribute types are wanted |
-| derefaliases | ? | ? | Specifies how aliases should be handled during the search |
-| resultfilter | ? | ? | |
+| ~~typesonly~~ | bool | false | ~~set to true if only attribute types are wanted~~ (not supported) |
+| derefaliases | enum | Ldap::never | Specifies how aliases should be handled during the search (`Ldap::never`, `ldap::searching`, `Ldap::finding`, `Ldap:always`) |
+| resultfilter | ? | ? | ? |
 
 #### Paging
 
 In order to retrieve results beyond the usual 1000 limits, you can set pagesize to an int > 0 to page results.
+
 When enabled, the Client use an internal mechanisms to automate the process and perform as many search() as necessary.
 
 ### add()
 
+:heavy_exclamation_mark: **not tested**
+
+```php
+add(string $dn, array entry): Result
+```
+
 ### modify()
+
+:heavy_exclamation_mark: **not tested**
+
+```php
+modify(string $dn, array changes): Result
+```
+
+example:
+
+```php
+$result = $client->modify('cn=test', [
+    ['add' => ['mail' => ['john@doe.com']],
+    ['delete' => ['email' => ['john@doe.com']],
+    ['replace' => ['sn' => ['John']],
+    ],
+]);
+```
 
 ### delete()
 
+```php
+delete(string $dn): Result
+```
+
 ### modDN()
+
+:heavy_exclamation_mark: **not tested**
+
+```php
+modDN(string $dn, string $newDn, bool $deleteOldDn, string $newSuperior): Result
+```
 
 ### compare()
 
+:heavy_exclamation_mark: **not tested**
+
+```php
+compare(string $dn, string $attribute, string $value): Result
+```
+
 ## Result usage
+
+`Result` emit usual event: data, end and error:
+
+```php
+$result->on('data', function ($data) {
+    // one search entry
+});
+
+$result->on('end', function ($data) {
+    // all search entries or an empty array if none
+});
+
+$result->on('error', function (Exception) {
+    echo 'error: '.$e->getMessage() . PHP_EOL;
+});
+```
 
 ## Server usage
 
