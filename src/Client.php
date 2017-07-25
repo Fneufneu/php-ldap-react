@@ -54,9 +54,6 @@ class Client extends EventEmitter
 
 	private function sendldapmessage($pdu, $successCode = 0)
 	{
-		// TODO messageID not avaible now
-		printf("[%d] sendldapmessage %d bytes".PHP_EOL,
-			$this->messageID - 1, strlen($pdu));
 		return $this->stream->write($pdu);
 	}
 	
@@ -101,7 +98,6 @@ class Client extends EventEmitter
 				if ("" != $cookie) {
 					$options = $this->savedSearchOptions[$message['messageID']];
 					$options['cookie'] = $cookie;
-					//echo "new options: ".json_encode($options).PHP_EOL;
 					$request = new Request\Search($this->messageID++, $options);
 					$this->savedSearchOptions[$request->messageId] = $options;
 					$this->asyncRequests->insert($request, 0);
@@ -169,7 +165,6 @@ class Client extends EventEmitter
 				$this->connected = true;
 				$this->pollRequests();
 			}, function (Exception $error) {
-				echo "error: ".$error->getMessage().PHP_EOL;
 				$this->deferred->reject($error);
 			});
 
@@ -186,11 +181,9 @@ class Client extends EventEmitter
 		$request = new Request\Bind($this->messageID++, $bind_rdn, $bind_password);
 
 		if ($this->connected) {
-			echo "already connected, sending bindRequest".PHP_EOL;
 			$this->queueRequest($request, 0);
 		} else {
 			$this->connect()->done(function () use ($bind_rdn, $bind_password, $request) {
-				echo "connected, sending bindRequest".PHP_EOL;
 				$this->queueRequest($request, 0);
 			});
 		}
@@ -243,7 +236,6 @@ class Client extends EventEmitter
 
 	private function pollRequests()
 	{
-		echo "pollRequests".PHP_EOL;
 		if ($this->asyncRequests->isEmpty())
 			return;
 		if (!$this->connected)
