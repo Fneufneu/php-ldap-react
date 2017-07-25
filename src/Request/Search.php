@@ -16,6 +16,7 @@ class Search extends Request
 		'sizelimit' => 0,
 		'timelimit' => 0,
 		'typesonly' => false,
+		'derefaliases' => self::never,
 	);
 
 	public function __construct($messageId, array $options)

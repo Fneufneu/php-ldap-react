@@ -11,10 +11,6 @@ class Ldap
 {
 	const version3 = 3;
 
-	const baseObject = 0;
-	const singleLevel = 1;
-	const wholeSubtree = 2;
-
 	const bindRequest = 0;
 	const bindResponse = 1;
 	const unbindRequest = 2;
@@ -49,6 +45,21 @@ class Ldap
 
 	const compareFalse = 5;
 	const compareTrue = 6;
+
+	/*
+	 * Search scope enum
+	 */
+	const baseObject = 0;
+	const singleLevel = 1;
+	const wholeSubtree = 2;
+
+	/*
+	 * Search deferAliases enum
+	 */
+	const never = 0;
+	const searching = 1;
+	const finding = 2;
+	const always = 3;
 
 	protected $messageID = 1;
 	protected $int2protocolOp = array(
