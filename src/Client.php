@@ -79,7 +79,7 @@ class Client extends EventEmitter
 			if (0 != $message['resultCode']) {
 				$this->deferred->reject(new \RuntimeException($message['diagnosticMessage']));
 			} else {
-				$this->deferred->resolve();
+				$this->deferred->resolve($this);
 			}
 		} elseif (0 != $message['resultCode']) {
 			$result->emit('error', array(new \RuntimeException($message['diagnosticMessage'])));
