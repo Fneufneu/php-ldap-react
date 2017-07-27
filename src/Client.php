@@ -28,6 +28,7 @@ class Client extends EventEmitter
 	private $requests;
 	private $asyncRequests;
 	private $parser;
+	private $messageID = 1;
 
 	function __construct(LoopInterface $loop, string $uri, $options = array())
 	{
@@ -70,6 +71,8 @@ class Client extends EventEmitter
 			return;
 		}
 
+		//printf('received %s request id (%d)' . PHP_EOL, $message['protocolOp'], $message['messageID']);
+
 		$result = $this->requests[$message['messageID']];
 
 		if ($message['protocolOp'] == 'bindResponse') {
@@ -78,19 +81,21 @@ class Client extends EventEmitter
 			} else {
 				$this->deferred->resolve($this);
 			}
+			unset($this->requests[$message['messageID']]);
 		} elseif (0 != $message['resultCode']) {
-			$result->emit('error', array(new \RuntimeException($message['diagnosticMessage'])));
-			$this->emit('error', array(new \RuntimeException($message['diagnosticMessage'])));
+			if ($result)
+				$result->error(new \RuntimeException($message['diagnosticMessage']));
+			else
+				$this->emit('error', array(new \RuntimeException($message['diagnosticMessage'])));
 		} elseif ($message['protocolOp'] == 'extendedResp') {
 			$streamEncryption = new \React\Socket\StreamEncryption($this->loop, false);
 			$streamEncryption->enable($this->stream)->then(function () {
 				$this->startTlsDeferred->resolve();
 			});
+			unset($this->requests[$message['messageID']]);
 		} elseif ($message['protocolOp'] == 'searchResEntry') {
 			$message = $this->searchResEntry($message);
-			$result->data[] = $message;
-			$result->emit('data', array($message));
-			//$this->emit('data', array($message));
+			$result->data($message);
 		} else {
 			if ($message['protocolOp'] == 'searchResDone'
 			and array_key_exists('1.2.840.113556.1.4.319', $message['controls'])) {
@@ -104,11 +109,11 @@ class Client extends EventEmitter
 					$this->requests[$request->messageId] = &$this->requests[$message['messageID']];
 					$this->pollRequests();
 				} else {
-					$result->emit('end', array($result->data));
+					$result->end();
 					unset($this->requests[$message['messageID']], $this->savedSearchOptions[$message['messageID']]);
 				}
 			} elseif ($result) {
-				$result->emit('end', array($result->data));
+				$result->end();
 				unset($this->requests[$message['messageID']]);
 			}
 		}
@@ -244,6 +249,7 @@ class Client extends EventEmitter
 			return;
 
 		$request = $this->asyncRequests->extract();
+		//printf('sending request (%d) and expect %s' . PHP_EOL, $request->messageId, $request->expectedAnswer);
 		$this->expectedAnswer = $request->expectedAnswer;
 		$this->sendldapmessage($request->toString());
 	}
