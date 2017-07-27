@@ -10,6 +10,7 @@ class Unbind extends Request
 
 	public function __construct($messageId)
 	{
+		$this->messageId = $messageId;
 		$this->message = Ber::sequence(
 			Ber::integer($messageId)
 			. Ber::application(self::unbindRequest, '', false));

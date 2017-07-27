@@ -9,6 +9,7 @@ class Delete extends Request
 {
 	public function __construct($messageId, $dn)
 	{
+		$this->messageId = $messageId;
 		$this->expectedAnswer = 'delResponse';
 		$this->message = Ber::sequence(Ber::integer($this->messageID++)
 			. Ber::application(self::delRequest, $dn, false));
