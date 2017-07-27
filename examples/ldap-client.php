@@ -30,7 +30,7 @@ $client->on('end', function () use ($loop) {
 	echo "client end".PHP_EOL;
 	$loop->stop();
 });
-$client->bind('blabla', 'blabla75')->then(function () use ($client, $loop) {
+$client->bind('blabla', 'blabla75')->then(function ($client) {
 	echo "binded\n";
 	$results = $client->search([
 		'base' => "cn=blabla",
@@ -49,28 +49,29 @@ $client->bind('blabla', 'blabla75')->then(function () use ($client, $loop) {
 	]);
 
 	$print_data = function ($data) {
-		static $h = false;
-		if (!$h) {
-			$h = true;
-			echo "|";
-			foreach ($data as $k => $v)
-				printf(" %'. 22s |", $k);
-			echo PHP_EOL;
-		}
-		echo "|";
-		foreach ($data as $k => $v)
-			printf(" %'. 22s |", $v);
-		echo PHP_EOL;
+		echo json_encode($data) . PHP_EOL;
 	};
-	$print_end = function ($data) {
-		printf('nb result: %d'.PHP_EOL, count($data));
+	$print_end = function () {
+		printf('end'.PHP_EOL);
 	};
-	$results->on('data', $print_data);
-	$results->on('end', $print_end);
-	$results2->on('data', $print_data);
-	$results2->on('end', $print_end);
-	$results3->on('data', $print_data);
-	$results3->on('end', $print_end);
+	$print_close = function () {
+		printf('close'.PHP_EOL);
+	};
+	$print_error = function ($e) {
+		echo 'error: '.$e->getMessage().PHP_EOL;
+	};
+	$results->on('data', $print_data)
+		->on('end', $print_end)
+		->on('close', $print_close)
+		->on('error', $print_error);
+	$results2->on('data', $print_data)
+		->on('end', $print_end)
+		->on('close', $print_close)
+		->on('error', $print_error);
+	$results3->on('data', $print_data)
+		->on('end', $print_end)
+		->on('close', $print_close)
+		->on('error', $print_error);
 	$client->unbind();
 }, function ($e) use ($loop) {
 	echo "bind failed: ".$e->getMessage().PHP_EOL;
