@@ -44,15 +44,15 @@ The constructor needs
 The client emit usual event: end, close and error:
 
 ```php
-$client->on('end', function (Exception) {
+$client->on('end', function () {
     echo "client's connection ended" . PHP_EOL;
 });
 
-$client->on('close', function (Exception) {
+$client->on('close', function () {
     echo "client's connection closed" . PHP_EOL;
 });
 
-$client->on('error', function (Exception) {
+$client->on('error', function (Exception $e) {
     echo 'error: '.$e->getMessage() . PHP_EOL;
 });
 ```
@@ -162,7 +162,7 @@ $result->on('end', function ($data) {
     // all search entries or an empty array if none
 });
 
-$result->on('error', function (Exception) {
+$result->on('error', function (Exception $e) {
     echo 'error: '.$e->getMessage() . PHP_EOL;
 });
 ```
