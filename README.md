@@ -169,4 +169,4 @@ $result->on('error', function (Exception $e) {
 
 ## Server usage
 
-NYI
+See [examples](examples).
