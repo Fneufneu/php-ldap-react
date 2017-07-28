@@ -8,7 +8,7 @@ use phpseclib\File\ASN1;
 class Parser
 {
 
-	protected $int2protocolOp = array(
+	public $int2protocolOp = array(
 		'bindRequest',
 		'bindResponse',
 		'unbindRequest',
@@ -167,6 +167,11 @@ class Parser
 			$res[] = $attribute['content'];
 		}
 		return $res;
+	}
+
+	private function AttributeDescription_($op) {
+		// TODO if not a string ?
+		return $op;
 	}
 	
 	private function PartialAttributeList_($op) {

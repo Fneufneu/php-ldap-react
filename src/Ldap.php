@@ -63,9 +63,25 @@ class Ldap
 
 	protected $messageID = 1;
 	protected $int2protocolOp = array(
-		'bindRequest', 'bindResponse', 'unbindRequest', 'searchRequest', 'searchResEntry', 'searchResDone', 'modifyRequest', 'modifyResponse',
-		'addRequest', 'addResponse', 'delRequest', 'delResponse', 'modDNRequest', 'modDNResponse', 'compareRequest', 'compareResponse',
-		19 => 'searchResRef', 23 => 'extendedReq', 24 => 'extendedResp',
+		'bindRequest',
+		'bindResponse',
+		'unbindRequest',
+		'searchRequest',
+		'searchResEntry',
+		'searchResDone',
+		'modifyRequest',
+		'modifyResponse',
+		'addRequest',
+		'addResponse',
+		'delRequest',
+		'delResponse',
+		'modDNRequest',
+		'modDNResponse',
+		'compareRequest',
+		'compareResponse',
+		19 => 'searchResRef',
+		23 => 'extendedReq',
+		24 => 'extendedResp',
 	);
 
 	protected $protocolOp2int;

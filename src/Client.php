@@ -124,7 +124,6 @@ class Client extends EventEmitter
 
 		if (strlen($data) > 0)
 			$this->handleData($data);
-		
 	}
 
 	private function searchResEntry($response)

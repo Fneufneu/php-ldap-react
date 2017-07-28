@@ -2,34 +2,35 @@
 
 namespace Fneufneu\React\Ldap;
 
+use Fneufneu\React\Ldap\LdapConnection;
 
+class Server
+{
+	private $callback;
 
-class Server extends Ldap
-{	
-	function __construct($transport) {
-		parent::__construct();
-		$this->fd = stream_socket_server($transport, $errno, $errstr);
-		if (!$this->fd) {
-			die("$errstr ($errno)\n");
-		} 
-	}
-
-	public function serverequests() 
+	public function __construct($callback)
 	{
-		print_r("serverequests ...\n");
-		while ($client = stream_socket_accept($this->fd)) {
-			fclose($this->fd);
-			$this->fd = $client;
-			while(1) {
-				$message = $this->receiveldapmessage();
-				$protocolOp = $message['protocolOp'];
-				$this->$protocolOp($message);
-				if ($protocolOp == 'unbindRequest') return;
-			}
-		}
+		if (!is_callable($callback))
+			throw new \InvalidArgumentException();
+
+		$this->callback = $callback;
 	}
-	
+
+	public function listen(\React\Socket\ServerInterface $socket)
+	{
+		$socket->on('connection', [$this, 'handleConnection']);
+	}
+
+	public function handleConnection(\React\Socket\ConnectionInterface $conn)
+	{
+		$callback = $this->callback;
+		$callback(new LdapConnection($conn));
+	}
+
+	/*
 	public function __call($operation, $args) {
+		echo "call with ";
+		var_dump($operation, $args);
 		$message = $args[0];
 		$msgid = $message['messageID'];
 		$pdu = self::sequence(self::integer($msgid) . self::application($this->protocolOp2int[$operation]+1 , self::ldapResult())); # . ($controls ? "\xA0" . self::len($controls) . $controls : ''));
@@ -69,7 +70,6 @@ class Server extends Ldap
 	
 	}
 	
-/*
 	protected function bindRequest($Request) {};
 	protected function bindResponse($Response) {};
 	protected function unbindRequest($Request) {};
