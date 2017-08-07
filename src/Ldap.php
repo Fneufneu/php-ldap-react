@@ -160,7 +160,7 @@ class Ldap
 		return Ber::octetstring($controlType) . ($criticality ? Ber::boolean($criticality) : '') . Ber::octetstring($controlValue);
 	}
 
-	protected function attributes($attributes)
+	protected function attributes(array $attributes)
 	{
 		foreach ($attributes as $attribute) {
 			$pdu .= Ber::octetstring($attribute);
