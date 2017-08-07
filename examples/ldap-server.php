@@ -1,12 +1,6 @@
 <?php
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/Ber.php';
-require __DIR__ . '/../src/Parser.php';
-require __DIR__ . '/../src/Ldap.php';
-require __DIR__ . '/../src/Server.php';
-require __DIR__ . '/../src/Response.php';
-require __DIR__ . '/../src/LdapConnection.php';
 
 use Fneufneu\React\Ldap\Ldap;
 use Fneufneu\React\Ldap\Ber;

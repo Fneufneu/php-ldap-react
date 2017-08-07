@@ -1,16 +1,6 @@
 <?php
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/Ber.php';
-require __DIR__ . '/../src/Parser.php';
-require __DIR__ . '/../src/Ldap.php';
-require __DIR__ . '/../src/Result.php';
-require __DIR__ . '/../src/Request.php';
-require __DIR__ . '/../src/Request/Search.php';
-require __DIR__ . '/../src/Request/Bind.php';
-require __DIR__ . '/../src/Request/Unbind.php';
-require __DIR__ . '/../src/Request/StartTls.php';
-require __DIR__ . '/../src/Client.php';
 
 $loop = React\EventLoop\Factory::create();
 
