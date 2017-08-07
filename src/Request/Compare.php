@@ -11,7 +11,7 @@ class Compare extends Request
 	{
 		$protocolOp = self::compareRequest;
 		$payload = Ber::sequence(Ber::octetstring($attributeDesc) . Ber::octetstring($assertionValue));
-		$pdu = Ber::octetstring($entry) .  $payload);
+		$pdu = Ber::octetstring($entry) .  $payload;
 
 		parent::__construct($messageId, $protocolOp, $pdu);
 	}
