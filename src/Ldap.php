@@ -168,9 +168,11 @@ class Ldap
 		return Ber::sequence($pdu);
 	}
 
-	protected function LDAPMessage($protocolOp, $pdu, $controls = '')
+	protected function ldapMessage($messageId, $protocolOp, $pdu, $controls = '')
 	{
-		return Ber::sequence(Ber::integer($this->messageID++) . Ber::application($protocolOp, $pdu) . ($controls ? "\xA0" . Ber::len($controls) . $controls : ''));
+		return Ber::sequence(Ber::integer($messageId)
+			. Ber::application($protocolOp, $pdu)
+			. ($controls ? "\xA0" . Ber::len($controls) . $controls : ''));
 	}
 
 	static function matchedValuesControl($filter = '', $criticality = false)

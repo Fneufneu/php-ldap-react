@@ -55,14 +55,7 @@ class Response extends Ldap
 	{
 		$this->messageId = $messageId;
 		$pdu = Ber::enumeration($resultCode) . Ber::octetstring($matchedDN) . Ber::octetstring($diagnosticMessage);
-		$this->message = $this->requestLdapMessage($messageId, $protocolOp, $pdu, $controls);	
-	}
-
-	protected function requestLdapMessage($messageId, $protocolOp, $pdu, $controls = '')
-	{
-		return Ber::sequence(Ber::integer($messageId)
-			. Ber::application($protocolOp, $pdu)
-			. ($controls ? "\xA0" . Ber::len($controls) . $controls : ''));
+		$this->message = $this->ldapMessage($messageId, $protocolOp, $pdu, $controls);	
 	}
 
 	public function __toString()

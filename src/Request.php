@@ -28,14 +28,7 @@ class Request extends Ldap
 
 		$this->messageId = $messageId;
 		$this->expectedAnswer = $this->answers[$protocolOp];
-		$this->message = $this->requestLdapMessage($messageId, $protocolOp, $pdu, $controls);	
-	}
-
-	protected function requestLdapMessage($messageId, $protocolOp, $pdu, $controls = '')
-	{
-		return Ber::sequence(Ber::integer($messageId)
-			. Ber::application($protocolOp, $pdu)
-			. ($controls ? "\xA0" . Ber::len($controls) . $controls : ''));
+		$this->message = $this->ldapMessage($messageId, $protocolOp, $pdu, $controls);	
 	}
 
 	public function toString()
