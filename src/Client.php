@@ -53,7 +53,7 @@ class Client extends EventEmitter
 		$this->asyncRequests = new \SplPriorityQueue();
 	}
 
-	private function sendldapmessage($pdu, $successCode = 0)
+	private function sendldapmessage($pdu)
 	{
 		return $this->stream->write($pdu);
 	}
@@ -72,7 +72,14 @@ class Client extends EventEmitter
 		}
 
 		//printf('received %s request id (%d)' . PHP_EOL, $message['protocolOp'], $message['messageID']);
+		$this->handleMessage($message);
 
+		if (strlen($data) > 0)
+			$this->handleData($data);
+	}
+
+	public function handleMessage($message)
+	{
 		$result = $this->requests[$message['messageID']];
 
 		if ($message['protocolOp'] == 'bindResponse') {
@@ -121,9 +128,6 @@ class Client extends EventEmitter
 			$this->expectedAnswer = '';
 			$this->pollRequests();
 		}
-
-		if (strlen($data) > 0)
-			$this->handleData($data);
 	}
 
 	private function searchResEntry($response)
