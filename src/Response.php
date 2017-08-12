@@ -53,6 +53,12 @@ class Response extends Ldap
 
 	public function __construct($messageId, $protocolOp, $resultCode = 0, $matchedDN = '', $diagnosticMessage = '')
 	{
+		if (!array_key_exists($resultCode, $this->resultCodes))
+			return new \InvalidArgumentException('invalid resultCode');
+
+		if (!array_key_exists($protocolOp, $this->int2protocolOp))
+			return new \InvalidArgumentException('invalid protocolOp');
+
 		$this->messageId = $messageId;
 		$pdu = Ber::enumeration($resultCode) . Ber::octetstring($matchedDN) . Ber::octetstring($diagnosticMessage);
 		$this->message = $this->ldapMessage($messageId, $protocolOp, $pdu, $controls);	
