@@ -29,6 +29,7 @@ class Client extends EventEmitter
 	private $asyncRequests;
 	private $parser;
 	private $messageID = 1;
+	private $expectedAnswer;
 
 	function __construct(LoopInterface $loop, string $uri, $options = array())
 	{
@@ -84,7 +85,7 @@ class Client extends EventEmitter
 
 		if ($message['protocolOp'] == 'bindResponse') {
 			if (0 != $message['resultCode']) {
-				$this->deferred->reject(new \RuntimeException($message['diagnosticMessage']));
+				$this->deferred->reject(new \RuntimeException($message['resultCode'] . ' ' . $message['diagnosticMessage']));
 			} else {
 				$this->deferred->resolve($this);
 			}
