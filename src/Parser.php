@@ -114,7 +114,11 @@ class Parser
 				$pp[$j] = $this->{$name.'_'}($op[$i++]);
 		}
 		// TODO adapter Controls_
-		$pp['controls'] = $this->Controls_($message[2]);
+        if (isset($message[2])) {
+            $pp['controls'] = $this->Controls_($message[2]);
+        } else {
+            $pp['controls'] = [];
+        }
 
 		$pp['messageID'] = $message[0]['content'];
 		$pp['protocolOp'] = $this->int2protocolOp[$tag];
